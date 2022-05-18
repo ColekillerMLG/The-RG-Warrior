@@ -8,7 +8,9 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private TextMeshProUGUI staminaBar;
     [SerializeField] private TextMeshProUGUI healthBar;
     [SerializeField] private TextMeshProUGUI dashBar;
-    [SerializeField] private TextMeshProUGUI rollBar;
+
+    private float DirX = 0;
+    private float DirY = 0;
 
     private float staminaUsage = 0.3f; // players base stamina usage per action
     private float speed = 2.5f; // players speed
@@ -21,15 +23,16 @@ public class PlayerMovement : MonoBehaviour
     private float staminaRegen = 0.01f; // multiple these by current each second (they are percents)
     private float healthRegen = 0.0f; // multiple these by current each second (they are percents)
     private float dash = 0f; // how many seconds left untill ready
-    private float roll = 0f; // how many seconds left untill ready
-    private float dashMax = 10f; // how long it takes in seconds for a dash to recharge
-    private float rollMax = 20f; // how long it takes in seconds for a roll to recharge
+    private float dashMax = 1f; // how long it takes in seconds for a dash to recharge
+    private float dashThrust = 1250f;
 
     // bools
     private bool isMoving = false;
     private bool isRunning = false;
     private bool RunningCoroutine = false; // is the running coroutine running
     private bool alive = true;
+    private bool isDashing = false;
+    private bool dashCoroutine = false;
     private void Start()
     {
         Player = this.gameObject;
@@ -40,6 +43,29 @@ public class PlayerMovement : MonoBehaviour
     }
     private void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Space) && dash == 0 && !isDashing)
+        {
+            //rb.velocity = new Vector2(DirX * speed * 100, DirY * speed * 100);
+            rb.AddRelativeForce(new Vector2(DirX, DirY) * dashThrust / rb.velocity.magnitude * 3);
+            // make an exception for not moving
+            dash = dashMax;
+            isDashing = true;
+            // after dashing reset timer and set bool so as not to override by walk/running
+        }
+        else if (!dashCoroutine && isDashing)
+        {
+            StartCoroutine(DashTime());
+            // start waiting for the resuming of regular movement after using dash only if not already waiting
+        }
+
+        if (dash > 0)
+        {
+            // if dash is not ready
+            dash -= Time.deltaTime;
+            dash = Mathf.Clamp(dash, 0, dashMax);
+            // if dash is less than zero -> set to zero
+        }
+
         if (Input.GetKey(KeyCode.LeftShift) && isMoving)
         {
             isRunning = true;
@@ -54,8 +80,8 @@ public class PlayerMovement : MonoBehaviour
     }
     private void FixedUpdate()
     {
-        float DirX = Input.GetAxis("Horizontal");
-        float DirY = Input.GetAxis("Vertical");
+        DirX = Input.GetAxis("Horizontal");
+        DirY = Input.GetAxis("Vertical");
         // WASD or arrow keys input
 
         if (DirX != 0 || DirY != 0)
@@ -75,14 +101,24 @@ public class PlayerMovement : MonoBehaviour
             // if going diagnaly slow the player down
         }
 
-        rb.velocity = new Vector2(DirX * speed, DirY * speed);
-        // move Player in proper direction if walking or running
+        if (!isDashing)
+        {
+            rb.velocity = new Vector2(DirX * speed, DirY * speed);
+        }
+        // move Player in proper direction if walking or running and not dashing
 
         if (isRunning && !RunningCoroutine)
         {
             StartCoroutine(Running());
             // if not running and conditions met -> run
         }
+    }
+    IEnumerator DashTime()
+    {
+        dashCoroutine = true;
+        yield return new WaitForSeconds(0.1f);
+        isDashing = false;
+        dashCoroutine = false;
     }
 
     void SetInfoBars()
@@ -96,16 +132,7 @@ public class PlayerMovement : MonoBehaviour
         }
         else
         {
-            dashBar.text = "Dash: " + dash;
-        }
-        // display time left until dash ready or if it is ready
-        if (roll + rollMax == rollMax)
-        {
-            rollBar.text = "Roll: Ready";
-        }
-        else
-        {
-            rollBar.text = "roll: " + roll;
+            dashBar.text = "Dash: " + Mathf.Round(dash);
         }
         // display time left until dash ready or if it is ready
     }
